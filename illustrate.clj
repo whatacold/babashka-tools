@@ -56,7 +56,7 @@
 (defn illustrate-file
   [file suffix]
   "Illustrate the top-level forms in file, and write the result back to the file with suffix"
-  (spit (str file suffix)
+  (spit (clojure.string/replace file #"(\.[a-z]+)$" (str suffix "$1"))
         (illustrate-string (slurp file))))
 
 (let [files (:arguments opts)]
