@@ -1,28 +1,65 @@
 #!/usr/bin/env bb
 
-(require '[clojure.tools.cli :refer [parse-opts]])
+(require '[clojure.tools.cli :refer [parse-opts]]
+         '[rewrite-clj.zip :as z]
+         '[rewrite-clj.node :as n])
 
 (def cli-options
   ;; An option with a required argument
   [["-i" "--in-place SUFFIX" "Suffix for new illustrated files"
     :default ""
-    :validate [#(<= 1 (count %) 5) "Must be a string having length of between 1 and 5"]]
+    :validate [#(<= 1 (count %) 5) "Must be a string with length of between 1 and 5"]]
    ["-h" "--help"]])
 
 (def opts (parse-opts *command-line-args* cli-options))
 
-(defn illustrate
-  [file suffix]
-  ;; (println "file" file "suffix" suffix ".")
-  (with-open [in (java.io.PushbackReader. (clojure.java.io/reader
-                                           file))]
-    (let [edn-seq (repeatedly (partial edn/read {:eof :theend} in))]
-      (spit (str file suffix ".x")
-            (with-out-str
-              (dorun (map (fn [obj]
-                            (println)
-                            (prn obj)
-                            (println "; => " (eval obj)))
-                          (take-while (partial not= :theend) edn-seq))))))))
+(defn remove-illustration-comments
+  [zloc]
+  "Remove illustration comments like `;; => xxx`."
+  (loop [zloc (-> zloc z/root z/edn* z/next*)] ; rewind to first zloc
+    (when zloc
+      (let [zloc (if (and (= :comment (z/tag zloc))
+                          (re-find #"^;; =>" (z/string zloc))
+                          )
+                   (z/remove* zloc)
+                   zloc)
+            right (z/right* zloc)]
+        (if-not right
+          zloc
+          (recur right))))))
 
-(illustrate (first (:arguments opts)) (:in-place (:options opts)))
+(defn add-illustration-comments
+  [zloc]
+  "Add illustration comments like `;; => xxx` for top-level forms."
+  (loop [zloc (-> zloc z/root z/edn)]
+    (let [comment (n/comment-node (->> zloc
+                                       z/sexpr
+                                       eval
+                                       (str "; => ")))
+          zloc (-> zloc
+                   (z/insert-right* comment)
+                   (z/insert-right* (n/newlines 1)))
+          right (z/right zloc)]
+      (if right
+        (recur right)
+        zloc))))
+
+(defn illustrate-string
+  [src]
+  "Illustrate the string, and return the result."
+  (let [zloc (z/of-string src)]
+    (-> zloc
+        remove-illustration-comments
+        add-illustration-comments
+        z/root-string)))
+
+(defn illustrate-file
+  [file suffix]
+  "Illustrate the top-level forms in file, and write the result back to the file with suffix"
+  (spit (str file suffix)
+        (illustrate-string (slurp file))))
+
+(let [files (:arguments opts)]
+  (if (empty? files)
+    (println (illustrate-string (slurp *in*)))
+    (illustrate-file (first files) (:in-place (:options opts)))))
