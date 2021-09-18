@@ -47,11 +47,14 @@
 (defn illustrate-string
   "Illustrate the string, and return the result."
   [src]
-  (let [zloc (z/of-string src)]
-    (-> zloc
-        remove-illustration-comments
-        add-illustration-comments
-        z/root-string)))
+  (if (clojure.string/blank? src)
+    src
+    (let [zloc (z/of-string src)]
+      (-> zloc
+          remove-illustration-comments
+          add-illustration-comments
+          z/root-string))))
+
 
 (defn illustrate-file
   "Illustrate the top-level forms in file, and write the result back to the file with suffix"
