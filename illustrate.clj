@@ -55,13 +55,44 @@
           add-illustration-comments
           z/root-string))))
 
+(defn illustrate-org-file
+  "Add illustration comments to an org-mode file"
+  [file new-file]
+  (let [lines (clojure.string/split-lines (slurp file))
+        result (reduce (fn
+                         [state line]
+                         (let [content (nth state 0)
+                               prev-in-block? (nth state 1)
+                               src-block (nth state 2)]
+                           (if prev-in-block?
+                             (if (re-matches #"\s*#\+end_src" line)
+                               [(str content (illustrate-string src-block) line "\n")
+                                false
+                                ""]
+                               [content
+                                true
+                                (str src-block line "\n")]) ; append to the source block
+                             ;; not in a src block previously
+                             [(str content line "\n")
+                              (if (re-matches #"\s*#\+begin_src\s+clojure" line)
+                                true
+                                false)
+                              ""])))
+                       ["" false ""]
+                       lines)]
+    (spit new-file (nth result 0))))
 
 (defn illustrate-file
   "Illustrate the top-level forms in file, and write the result back to the file with suffix"
   [file suffix]
-  (spit (clojure.string/replace file #"(\.[a-z]+)$" (str suffix "$1"))
-        (illustrate-string (slurp file))))
+  (let [new-file (clojure.string/replace file
+                                         #"(\.[a-z]+)$"
+                                         (str suffix "$1"))]
+    (if (clojure.string/ends-with? file ".org")
+      (illustrate-org-file file new-file)
+      (spit new-file (illustrate-string (slurp file))))))
 
+;; main
 (let [files (:arguments opts)]
   (if (empty? files)
     (println (illustrate-string (slurp *in*)))
