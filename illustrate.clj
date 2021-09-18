@@ -14,8 +14,8 @@
 (def opts (parse-opts *command-line-args* cli-options))
 
 (defn remove-illustration-comments
-  [zloc]
   "Remove illustration comments like `;; => xxx`."
+  [zloc]
   (loop [zloc (-> zloc z/root z/edn* z/next*)] ; rewind to first zloc
     (when zloc
       (let [zloc (if (and (= :comment (z/tag zloc))
@@ -29,8 +29,8 @@
           (recur right))))))
 
 (defn add-illustration-comments
-  [zloc]
   "Add illustration comments like `;; => xxx` for top-level forms."
+  [zloc]
   (loop [zloc (-> zloc z/root z/edn)]
     (let [comment (n/comment-node (->> zloc
                                        z/sexpr
@@ -45,8 +45,8 @@
         zloc))))
 
 (defn illustrate-string
-  [src]
   "Illustrate the string, and return the result."
+  [src]
   (let [zloc (z/of-string src)]
     (-> zloc
         remove-illustration-comments
@@ -54,8 +54,8 @@
         z/root-string)))
 
 (defn illustrate-file
-  [file suffix]
   "Illustrate the top-level forms in file, and write the result back to the file with suffix"
+  [file suffix]
   (spit (clojure.string/replace file #"(\.[a-z]+)$" (str suffix "$1"))
         (illustrate-string (slurp file))))
 
